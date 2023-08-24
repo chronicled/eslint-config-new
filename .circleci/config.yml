@@ -1,0 +1,55 @@
+defaults: &defaults
+  working_directory: ~/eslint-config
+  docker:
+    - image: circleci/node:14
+
+version: 2
+jobs:
+  build:
+    <<: *defaults
+    steps:
+      - checkout
+      - restore_cache:
+          key: dependency-cache-{{ checksum "package.json" }}
+      - run: npm install
+      - save_cache:
+          key: dependency-cache-{{ checksum "package.json" }}
+          paths:
+            - node_modules
+
+  deployment:
+    <<: *defaults
+    steps:
+      - checkout
+      - restore_cache:
+          key: dependency-cache-{{ checksum "package.json" }}
+      - run:
+          name: Setup NPM Publication Parameters
+          command: |
+            read -r NPM_TAG NPM_VERSION_STEP <<<$(.circleci/get-npm-tag.sh);
+            echo "export NPM_TAG='$NPM_TAG'" >> $BASH_ENV;
+            echo "export NPM_VERSION_STEP='$NPM_VERSION_STEP'" >> $BASH_ENV;
+            echo "//registry.npmjs.org/:_authToken=$NPM_TOKEN" >> ~/.npmrc;
+      - run: npm install
+      - run: npm run build
+      - run: npm --no-git-tag-version version `npm view @chronicled/eslint-config dist-tags.$NPM_TAG`
+      - run: npm --no-git-tag-version version $NPM_VERSION_STEP
+      - run: git config --global user.email $GIT_EMAIL
+      - run: git config --global user.name $GIT_USERNAME
+      - run: git tag -a v`node .bin/version.js` -m v`node .bin/version.js`
+      - run: npm publish --tag $NPM_TAG
+      - run: git push --tags
+
+workflows:
+  version: 2
+  eslint_config_flow:
+    jobs:
+      - build
+      - deployment:
+          requires:
+            - build
+          filters:
+            branches:
+              only:
+                - master
+                - develop
