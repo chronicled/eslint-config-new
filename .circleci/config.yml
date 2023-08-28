@@ -1,7 +1,7 @@
 defaults: &defaults
   working_directory: ~/eslint-config
   docker:
-    - image: circleci/node:14
+    - image: cimg/node:14.21
 
 version: 2
 jobs:
@@ -44,8 +44,10 @@ workflows:
   version: 2
   eslint_config_flow:
     jobs:
-      - build
+      - build:
+          context: npm
       - deployment:
+          context: npm      
           requires:
             - build
           filters:
